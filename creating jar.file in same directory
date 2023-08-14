@@ -1,0 +1,231 @@
+trigger:
+   branches:
+     include:
+       - pacs008_integration
+
+pr: none
+
+pool:
+  vmImage: 'ubuntu-latest'
+
+jobs:
+- job: Build
+  displayName: 'Build Job'
+  steps:
+    - task: MavenAuthenticate@0
+      displayName: 'Maven Authenticate'
+      inputs:
+        artifactsFeeds: ap
+
+    - task: Maven@3
+      displayName: 'Maven Build'
+      inputs:
+        mavenPomFile: '/home/vsts/work/1/s/payment-gateway/pom.xml'
+        mavenOptions: '-Xmx1024m'
+        javaHomeOption: 'JDKVersion'
+        jdkVersionOption: '17'
+        jdkArchitectureOption: 'x64'
+        publishJUnitResults: true
+        testResultsFiles: '**/surefire-reports/TEST-*.xml'
+        goals: 'package'
+
+    - task: CopyFiles@2
+      displayName: 'Copy JAR Artifact'
+      inputs:
+        SourceFolder: '$(Build.SourcesDirectory)'
+        Contents: '*.jar'
+        TargetFolder: '$(Pipeline.Workspace)'
+
+    - task: PublishBuildArtifacts@1
+      displayName: 'Publish Artifact'
+      inputs:
+        PathtoPublish: '$(Pipeline.Workspace)'
+        ArtifactName: 'payment-gatewayJAR'
+        publishLocation: 'Container'
+
+- job: Deploy
+  displayName: 'Deploy Job'
+  dependsOn: Build
+  steps:
+    - task: DownloadBuildArtifacts@0
+      displayName: 'Download Artifact'
+      inputs:
+        artifactName: 'payment-gatewayJAR'
+        downloadType: 'single'
+        itemPattern: '**/*.jar'
+        downloadPath: '$(Pipeline.Workspace)'
+
+    - task: AzureWebApp@1
+      displayName: 'Deploy to Azure Web App'
+      inputs:
+        azureSubscription: 'Pay-As-You-Go (323d8e01-ddf5-4ccb-9178-4c65f4b8dfa7)'
+        appName: 'pipel'
+        package: '$(Pipeline.Workspace)/**/*.jar'  # Update the path to match your JAR file
+
+    - task: Docker@2
+      displayName: 'Build and Push Docker Image'
+      inputs:
+        command: 'buildAndPush'
+        dockerRegistryServiceConnection: 'fce696b1-f51e-4edf-91ad-441b4bfdc383'
+        imageName: 'payment-gateway'
+        containerRegistry: 'primesoft'
+        dockerfilePath: '$(Build.SourcesDirectory)/Dockerfile'
+        buildContext: '$(Pipeline.Workspace)'
+        tags: '$(Build.BuildId)'
+
+
+dockerfile:
+
+FROM openjdk:17
+RUN mkdir -p /var/www/html/logs/tc_messages
+RUN mkdir /var/www/html/logs/tc_testruns
+COPY .${jarpath}/target/paymentgateway.jar /paymentgateway.jar
+EXPOSE 9081
+CMD ["java", "-jar", "paymentgateway.jar"]
+
+
+pom.xml data
+
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+    <parent>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-parent</artifactId>
+        <version>2.7.11</version>
+        <relativePath/>
+    </parent>
+    <groupId>com.primesoftinc</groupId>
+    <artifactId>payment-gateway</artifactId>
+    <version>1.0.0</version>
+    <packaging>jar</packaging>
+    <name>payment-gateway</name>
+    <properties>
+        <java.version>17</java.version>
+        <maven.compiler.source>17</maven.compiler.source>
+        <maven.compiler.target>17</maven.compiler.target>
+    </properties>
+    <dependencies>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-web</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.primesoftinc</groupId>
+            <artifactId>core-simulator</artifactId>
+            <version>1.0.0</version>
+        </dependency>
+        <dependency>
+            <groupId>com.primesoftinc</groupId>
+            <artifactId>rules-manager</artifactId>
+            <version>1.0.0</version>
+        </dependency>
+        <dependency>
+            <groupId>com.primesoftinc</groupId>
+            <artifactId>message-models</artifactId>
+            <version>1.0.0</version>
+        </dependency>
+        <dependency>
+            <groupId>javax.xml.bind</groupId>
+            <artifactId>jaxb-api</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.sun.xml.bind</groupId>
+            <artifactId>jaxb-impl</artifactId>
+            <version>2.2.11</version>
+        </dependency>
+        <dependency>
+            <groupId>com.sun.xml.bind</groupId>
+            <artifactId>jaxb-core</artifactId>
+            <version>2.2.11</version>
+        </dependency>
+        <dependency>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-databind</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.projectlombok</groupId>
+            <artifactId>lombok</artifactId>
+            <optional>true</optional>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-tomcat</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-amqp</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-data-jpa</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-data-mongodb</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.h2database</groupId>
+            <artifactId>h2</artifactId>
+            <scope>runtime</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-devtools</artifactId>
+        </dependency>
+    </dependencies>
+    <build>
+        <finalName>pgw</finalName>
+        <plugins>
+            <plugin>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+                <configuration>
+                    <excludes>
+                        <exclude>
+                            <groupId>org.projectlombok</groupId>
+                            <artifactId>lombok</artifactId>
+                        </exclude>
+                    </excludes>
+                </configuration>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <version>2.19.1</version>
+            </plugin>
+        </plugins>
+    </build>
+    <repositories>
+        <repository>
+            <id>ap</id>
+            <url>https://pkgs.dev.azure.com/payapt/SchemeSimulator/_packaging/ap/maven/v1</url>
+            <releases>
+                <enabled>true</enabled>
+            </releases>
+            <snapshots>
+                <enabled>true</enabled>
+            </snapshots>
+        </repository>
+    </repositories>
+    <distributionManagement>
+        <repository>
+            <id>ap</id>
+            <url>https://pkgs.dev.azure.com/payapt/SchemeSimulator/_packaging/ap/maven/v1</url>
+            <releases>
+                <enabled>true</enabled>
+            </releases>
+            <snapshots>
+                <enabled>true</enabled>
+            </snapshots>
+        </repository>
+    </distributionManagement>
+</project>
+
