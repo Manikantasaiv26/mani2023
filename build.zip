@@ -1,0 +1,22 @@
+trigger:
+  branches:
+    include:
+      - main
+
+pool:
+  vmImage: 'ubuntu-latest'
+
+steps:
+- script: |
+    # Build your application here (replace this with your build commands)
+    echo "Building application..."
+
+- task: ArchiveFiles@2
+  inputs:
+    rootFolderOrFile: '$(Build.SourcesDirectory)' # Root folder where your build files are located
+    includeRootFolder: false
+    archiveType: 'zip'
+    archiveFile: '$(Build.ArtifactStagingDirectory)/build.zip' # Output path and file name for the zip artifact
+
+- publish: $(Build.ArtifactStagingDirectory)/build.zip
+  artifact: drop
